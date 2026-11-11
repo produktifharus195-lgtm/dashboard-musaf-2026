@@ -3,7 +3,7 @@
 
 button:disabled{opacity:.45;cursor:not-allowed}.auth{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.pill{background:#e8f7ee;padding:5px 10px;border-radius:20px;font-size:12px}.rowactions{display:flex;gap:6px}.muted-box{background:#f4f8f5;padding:12px;border-radius:10px}.note{font-size:12px;color:#66786e}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #1a8f60}</style></head><body>
 <header><div class="small">LDKS FSH • KEPANITIAAN 2026</div><h1>Dashboard MUSAF 2026</h1><p>Koordinasi divisi, tugas, dan kesiapan acara secara real-time</p></header>
-<div class="wrap"><div id="connection" class="notice">⏳ Menyiapkan login...</div><section class="card auth"><div><strong id="identity">Belum masuk</strong><div class="small muted" id="userInfo">Masuk menggunakan Google untuk mengakses dashboard</div></div><div><button id="login">Masuk dengan Google</button><button id="logout" class="outline hidden">Keluar</button></div></section><nav id="tabs"><button data-tab="home" class="active">Beranda</button><button data-tab="pra">Pra-MUSAF</button><button data-tab="musaf">MUSAF</button><button data-tab="division">Divisi & Tugas</button><button data-tab="finance">Keuangan</button><button data-tab="report">Laporan</button><button data-tab="users" class="hidden">Akses Pengurus</button></nav><main id="main"></main></div><footer>LDKS FSH • MUSAF 2026 · Firebase Realtime Database</footer>
+<div class="wrap"><div id="connection" class="notice">⏳ Menyiapkan login...</div><section class="card auth"><div><strong id="identity">Belum masuk</strong><div class="small muted" id="userInfo">Masuk menggunakan Google untuk mengakses dashboard</div></div><div><button id="login">Masuk dengan Google</button><button id="logout" class="outline hidden">Keluar</button></div></section><nav id="tabs"><button data-tab="home" class="active">Beranda</button><button data-tab="pra">Pra-MUSAF</button><button data-tab="musaf">MUSAF</button><button data-tab="division">Divisi & Tugas</button><button data-tab="finance">Keuangan</button><button data-tab="report">Laporan</button><button data-tab="users" class="hidden">Akses Pengurus</button></nav><section id="seedPanel" class="card hidden"><div class="flex"><div><h2>Isi Tugas Otomatis</h2><p class="muted small">Pra-MUSAF & MUSAF • hanya Super Admin • tidak menghapus tugas lama</p></div><button type="button" id="seedButton">+ Isi Tugas Otomatis</button></div><div id="seedResult" class="small muted" aria-live="polite"></div></section><main id="main"></main></div><footer>LDKS FSH • MUSAF 2026 · Firebase Realtime Database</footer>
 <dialog id="taskDialog"><div class="flex"><h2 id="taskHeading">Tambah Tugas</h2><button class="outline tiny" type="button" id="closeTask">Tutup</button></div><form id="taskForm"><input type="hidden" id="taskId"><input type="hidden" id="oldDivision"><div class="fields"><label>Agenda<select id="taskAgenda"><option value="pra">Pra-MUSAF</option><option value="musaf">MUSAF</option></select></label><label>Divisi<select id="taskDivision"></select></label></div><label>Nama tugas<input id="taskTitle" maxlength="160" required></label><div class="fields"><label>PIC<input id="taskPic" maxlength="90"></label><label>Deadline<input type="date" id="taskDeadline"></label></div><div class="fields"><label>Prioritas<select id="taskPriority"><option>Rendah</option><option selected>Sedang</option><option>Tinggi</option><option>Mendesak</option></select></label><label>Status<select id="taskStatus"><option value="todo">Belum dikerjakan</option><option value="doing">Dalam proses</option><option value="done">Selesai</option></select></label></div><label>Catatan<textarea id="taskNotes" maxlength="1000"></textarea></label><button type="submit">Simpan Tugas</button></form></dialog>
 <dialog id="financeDialog"><div class="flex"><h2>Catatan Keuangan</h2><button type="button" class="outline tiny" id="closeFinance">Tutup</button></div><form id="financeForm"><div class="fields"><label>Jenis<select id="financeType"><option value="income">Pemasukan</option><option value="expense">Pengeluaran</option><option value="budget">RAB</option></select></label><label>Agenda<select id="financeAgenda"><option value="pra">Pra-MUSAF</option><option value="musaf">MUSAF</option></select></label></div><div class="fields"><label>Tanggal<input id="financeDate" type="date" required></label><label>Divisi<select id="financeDivision"></select></label></div><label>Uraian<input id="financeTitle" maxlength="160" required></label><label>Nominal (Rp)<input id="financeAmount" type="number" min="1" step="1" required></label><label>Catatan<input id="financeNotes" maxlength="300"></label><button type="submit">Simpan</button></form></dialog>
 <script type="module">
@@ -18,7 +18,7 @@ const firebaseConfig = {
 };
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import {getDatabase,ref,onValue,get,set,push,remove} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
+import {getDatabase,ref,onValue,get,set,push,remove,runTransaction} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getDatabase(app),root='musaf2026';
 const divisionMap={ketua:'Ketua Pelaksana',sekretaris:'Sekretaris Umum',bendahara:'Bendahara Umum',acara:'Acara',pdd:'PDD',konsumsi:'Konsumsi',perlengkapan:'Perlengkapan'};
 const divisions=Object.keys(divisionMap),$=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -27,13 +27,52 @@ const seed={pra:{'Ketua Pelaksana':['Rapat koordinasi awal','Monitoring progres 
 
 let currentUser=null,role=null,tab='home',filter='all',tasks={},finance={},roles={},unsubs=[];
 const isAdmin=()=>role?.role==='superadmin',isKetua=()=>role?.role==='ketuplak',canTask=d=>isAdmin()||isKetua()||(role?.role==='koor'&&role?.division===d),canFinance=()=>isAdmin()||(role?.role==='koor'&&role?.division==='bendahara');
+// Kunci deterministik untuk mencegah duplikasi ketika tombol dijalankan berulang.
+const normalizeTitle=s=>String(s||'').normalize('NFKC').trim().toLocaleLowerCase('id-ID').replace(/\s+/g,' ');
+function seedKey(agenda,division,title){const str=agenda+'|'+division+'|'+normalizeTitle(title);let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}return 'seed_'+(h>>>0).toString(36)}
+let seedBusy=false;
+async function seedAllTasks(){
+  if(!isAdmin()||!currentUser||seedBusy)return;
+  if(!confirm('Isi tugas bawaan Pra-MUSAF dan MUSAF? Tugas yang sudah ada tidak akan diubah atau dihapus.'))return;
+  seedBusy=true;const btn=$('seedButton');btn.disabled=true;btn.textContent='⏳ Mengisi tugas...';
+  let added=0,skipped=0,failed=0;
+  try{
+    // Ambil kondisi terbaru dari server, jangan hanya mengandalkan cache layar.
+    const snap=await get(ref(db,root+'/tasks'));
+    const existing=snap.val()||{};
+    const known=new Set();
+    for(const [division,group] of Object.entries(existing))for(const item of Object.values(group||{})){
+      if(item&&item.agenda&&item.title)known.add(item.agenda+'|'+division+'|'+normalizeTitle(item.title));
+    }
+    for(const agenda of ['pra','musaf'])for(const [divisionLabel,titles] of Object.entries(seed[agenda])){
+      const division=divisions.find(d=>divisionMap[d]===divisionLabel);
+      if(!division)continue;
+      for(const title of titles){
+        const signature=agenda+'|'+division+'|'+normalizeTitle(title);
+        if(known.has(signature)){skipped++;continue}
+        const id=seedKey(agenda,division,title);
+        try{
+          const result=await runTransaction(ref(db,`${root}/tasks/${division}/${id}`),old=>{
+            if(old!==null)return; // jangan pernah menimpa data yang sudah ada
+            return {agenda,title,pic:'',deadline:'',priority:'Sedang',status:'todo',notes:'Tugas awal otomatis • PIC dan deadline dapat diisi kemudian',createdAt:Date.now(),seeded:true};
+          },{applyLocally:false});
+          if(result.committed){added++;known.add(signature)}else skipped++;
+        }catch(err){failed++;console.error('Gagal menambahkan tugas',title,err)}
+      }
+    }
+    $('seedResult').textContent=`Selesai: ${added} tugas ditambahkan, ${skipped} dilewati (sudah ada), ${failed} gagal.`;
+    if(failed)alert('Sebagian tugas gagal disimpan. Periksa izin Firebase dan coba lagi; tugas yang berhasil tidak akan digandakan.');
+  }catch(err){$('seedResult').textContent='Gagal membaca daftar tugas: '+err.message;alert('Pengisian dibatalkan: '+err.message)}
+  finally{seedBusy=false;btn.disabled=false;btn.textContent='+ Isi Tugas Otomatis'}
+}
+$('seedButton').onclick=seedAllTasks;
 const taskList=()=>Object.entries(tasks).flatMap(([division,group])=>Object.entries(group||{}).map(([id,t])=>({id,division,...t}))),finList=()=>Object.entries(finance).map(([id,f])=>({id,...f}));
 const stats=arr=>({total:arr.length,done:arr.filter(t=>t.status==='done').length,doing:arr.filter(t=>t.status==='doing').length,late:arr.filter(t=>t.deadline&&t.deadline<new Date().toISOString().slice(0,10)&&t.status!=='done').length});
 const percent=arr=>arr.length?Math.round(100*stats(arr).done/arr.length):0;
 const progress=arr=>`<div class="bar"><div style="width:${percent(arr)}%"></div></div><div class="small muted">${stats(arr).done}/${arr.length} selesai • ${percent(arr)}%</div>`;
 const buttonAdd=(d,agenda)=>canTask(d)?`<button class="tiny" data-add="${d}" data-agenda="${agenda}">+ Tambah Tugas</button>`:'';
 function taskHtml(t){return `<div class="task"><div class="flex"><label><input type="checkbox" data-check="${t.division}|${t.id}" ${t.status==='done'?'checked':''} ${canTask(t.division)?'':'disabled'}><span><strong>${esc(t.title)}</strong><span class="small muted">${esc(divisionMap[t.division])} • ${agendaName(t.agenda)} • PIC: ${esc(t.pic||'Belum ditentukan')}</span></span></label>${canTask(t.division)?`<span class="rowactions"><button class="outline tiny" data-edit="${t.division}|${t.id}">Edit</button><button class="outline danger tiny" data-delete="${t.division}|${t.id}">Hapus</button></span>`:''}</div><div class="small muted" style="padding-left:26px">${t.status==='done'?'Selesai':t.status==='doing'?'Dalam proses':'Belum dikerjakan'} • ${esc(t.priority||'Sedang')}${t.deadline?' • '+esc(t.deadline):''}${t.notes?' • '+esc(t.notes):''}</div></div>`}
-function render(){let arr=taskList(),f=finList(),html='';if(!currentUser){$('main').innerHTML='<div class="card">Silakan masuk menggunakan Google.</div>';return}if(!role){$('main').innerHTML='<div class="card"><h2>Akun belum mendapat akses</h2><p>Hubungi Super Admin untuk mendaftarkan UID akun ini. Data kepanitiaan tidak dapat dibuka.</p></div>';return}
+function render(){$('seedPanel').classList.toggle('hidden',!isAdmin()||!currentUser);let arr=taskList(),f=finList(),html='';if(!currentUser){$('main').innerHTML='<div class="card">Silakan masuk menggunakan Google.</div>';return}if(!role){$('main').innerHTML='<div class="card"><h2>Akun belum mendapat akses</h2><p>Hubungi Super Admin untuk mendaftarkan UID akun ini. Data kepanitiaan tidak dapat dibuka.</p></div>';return}
 if(tab==='home'){let s=stats(arr);html=`<div class="grid">${[['Seluruh tugas',s.total],['Selesai',s.done],['Dalam proses',s.doing],['Terlambat',s.late]].map(([a,b])=>`<div class="card"><div class="muted">${a}</div><div class="stat">${b}</div></div>`).join('')}</div><div class="grid"><div class="card"><h2>Pra-MUSAF</h2><div class="muted">21/22 November 2026 • tentatif</div>${progress(arr.filter(t=>t.agenda==='pra'))}</div><div class="card"><h2>MUSAF</h2><div class="muted">5–6 Desember 2026 • menginap</div>${progress(arr.filter(t=>t.agenda==='musaf'))}</div></div><div class="card"><h2>Progres per Divisi</h2>${divisions.map(d=>`<div class="progress-row"><strong>${divisionMap[d]}</strong>${progress(arr.filter(t=>t.division===d))}</div>`).join('')}</div><div class="card"><h2>Prioritas Tinggi / Terlambat</h2>${arr.filter(t=>t.status!=='done'&&(t.priority==='Tinggi'||t.priority==='Mendesak'||(t.deadline&&t.deadline<new Date().toISOString().slice(0,10)))).slice(0,20).map(taskHtml).join('')||'<p class="muted">Belum ada.</p>'}</div>`}
 else if(tab==='pra'||tab==='musaf'){let a=arr.filter(t=>t.agenda===tab);html=`<div class="card"><h2>${agendaName(tab)}</h2>${progress(a)}</div>`+divisions.map(d=>`<div class="card"><div class="flex"><h2>${divisionMap[d]}</h2>${buttonAdd(d,tab)}</div>${a.filter(t=>t.division===d).map(taskHtml).join('')||'<p class="muted">Belum ada tugas.</p>'}</div>`).join('')}
 else if(tab==='division'){let a=filter==='all'?arr:arr.filter(t=>t.division===filter);html=`<div class="card"><h2>Divisi & Tugas</h2><label>Filter divisi <select id="divisionFilter"><option value="all">Semua Divisi</option>${divisions.map(d=>`<option value="${d}" ${filter===d?'selected':''}>${divisionMap[d]}</option>`).join('')}</select></label>${progress(a)}</div>`+divisions.filter(d=>filter==='all'||filter===d).map(d=>`<div class="card"><div class="flex"><h2>${divisionMap[d]}</h2>${buttonAdd(d,'pra')}</div>${a.filter(t=>t.division===d).map(taskHtml).join('')||'<p class="muted">Belum ada tugas.</p>'}</div>`).join('')}
