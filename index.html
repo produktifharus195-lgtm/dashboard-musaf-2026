@@ -112,6 +112,11 @@ nav button,.outline,input,select,textarea{background:var(--surface);color:var(--
 <div id="deadlineList" class="alarm-list"></div>
 <div class="alarm-actions"><button id="enableMusafPush" type="button">Aktifkan Notifikasi HP</button><button id="disableMusafPush" type="button" class="outline hidden">Nonaktifkan Push</button><button id="enableMusafSound" type="button" class="outline">🔈 Aktifkan Alarm Suara</button><button id="deadlineDismiss" type="button" class="outline">Tutup pengingat</button></div>
 <p id="pushFeedback" class="alarm-hint">Push saat browser ditutup memerlukan izin notifikasi dan konfigurasi Firebase Cloud Messaging.</p>
+</section>
+<section id="musafTestPanel" class="card hidden" aria-label="Uji coba notifikasi HP">
+  <div class="flex"><div><h2>🔔 Tes Notifikasi Sekarang</h2><p class="muted small">Khusus Super Admin • Kirim uji coba ke perangkat milik akun Google ini yang sudah mengaktifkan push.</p></div>
+  <button id="testMusafPush" type="button">Kirim Tes ke HP</button></div>
+  <div id="testMusafPushFeedback" class="note" role="status" aria-live="polite">Klik dari laptop untuk menguji notifikasi di HP yang sudah mendaftar.</div>
 </section><section id="seedPanel" class="card hidden"><div class="flex"><div><h2>Isi Tugas Otomatis</h2><p class="muted small">Pra-MUSAF & MUSAF • hanya Super Admin • tidak menghapus tugas lama</p></div><button type="button" id="seedButton">+ Isi Tugas Otomatis</button></div><div id="seedResult" class="small muted" aria-live="polite"></div></section><main id="main"></main></div><footer>LDKS FSH • MUSAF 2026 · Firebase Realtime Database</footer>
 <dialog id="taskDialog"><div class="flex"><h2 id="taskHeading">Tambah Tugas</h2><button class="outline tiny" type="button" id="closeTask">Tutup</button></div><form id="taskForm"><input type="hidden" id="taskId"><input type="hidden" id="oldDivision"><div class="fields"><label>Agenda<select id="taskAgenda"><option value="pra">Pra-MUSAF</option><option value="musaf">MUSAF</option></select></label><label>Divisi<select id="taskDivision"></select></label></div><label>Nama tugas<input id="taskTitle" maxlength="160" required></label><div class="fields"><label>PIC<input id="taskPic" maxlength="90"></label><label>Deadline<input type="date" id="taskDeadline"></label></div><div class="fields"><label>Prioritas<select id="taskPriority"><option>Rendah</option><option selected>Sedang</option><option>Tinggi</option><option>Mendesak</option></select></label><label>Status<select id="taskStatus"><option value="todo">Belum dikerjakan</option><option value="doing">Dalam proses</option><option value="done">Selesai</option></select></label></div><label>Catatan<textarea id="taskNotes" maxlength="1000"></textarea></label><button type="submit">Simpan Tugas</button></form></dialog>
 <dialog id="financeDialog"><div class="flex"><h2>Catatan Keuangan</h2><button type="button" class="outline tiny" id="closeFinance">Tutup</button></div><form id="financeForm"><div class="fields"><label>Jenis<select id="financeType"><option value="income">Pemasukan</option><option value="expense">Pengeluaran</option><option value="budget">RAB</option></select></label><label>Agenda<select id="financeAgenda"><option value="pra">Pra-MUSAF</option><option value="musaf">MUSAF</option></select></label></div><div class="fields"><label>Tanggal<input id="financeDate" type="date" required></label><label>Divisi<select id="financeDivision"></select></label></div><label>Uraian<input id="financeTitle" maxlength="160" required></label><label>Nominal (Rp)<input id="financeAmount" type="number" min="1" step="1" required></label><label>Catatan<input id="financeNotes" maxlength="300"></label><button type="submit">Simpan</button></form></dialog>
@@ -242,6 +247,33 @@ async function activatePush(){
  }catch(err){pushStatus('⚠️ '+err.message)}finally{btn.disabled=false}
 }
 $('enableMusafPush').onclick=activatePush;
+// Uji coba push melalui Worker: tidak ada Firebase private key di browser.
+// Hanya Super Admin yang bisa menekan tombol, dan Worker memverifikasi ulang
+// Firebase ID token beserta role superadmin pada Realtime Database.
+const MUSAF_PUSH_TEST_ENDPOINT='https://musaf-deadline-alarm3.produktifharus195.workers.dev/test';
+async function testMusafPushNow(){
+  const button=$('testMusafPush'),feedback=$('testMusafPushFeedback');
+  if(!currentUser||!isAdmin()){
+    feedback.textContent='⚠️ Fitur tes hanya untuk Super Admin yang sedang login.';return;
+  }
+  button.disabled=true;
+  feedback.textContent='⏳ Meminta Worker mengirim notifikasi uji ke perangkatmu...';
+  try{
+    const idToken=await currentUser.getIdToken();
+    const response=await fetch(MUSAF_PUSH_TEST_ENDPOINT,{
+      method:'POST',mode:'cors',cache:'no-store',
+      headers:{'Authorization':'Bearer '+idToken,'Content-Type':'application/json'},
+      body:JSON.stringify({type:'test'})
+    });
+    const result=await response.json().catch(()=>({message:'Respons Worker tidak dapat dibaca.'}));
+    if(!response.ok||!result.ok)throw new Error(result.message||`Worker mengembalikan HTTP ${response.status}`);
+    feedback.textContent=`✅ FCM menerima ${result.sent} notifikasi uji untuk akunmu. ${result.failed?`${result.failed} gagal. `:''}Cek HP yang sudah terdaftar, terutama saat dashboard tidak dibuka.`;
+  }catch(error){
+    feedback.textContent='⚠️ Tes belum berhasil: '+String(error.message||error).slice(0,240);
+  }finally{button.disabled=false}
+}
+$('testMusafPush').onclick=testMusafPushNow;
+
 $('disableMusafPush').onclick=async()=>{if(!currentUser||!pushDeviceKey)return;try{await remove(ref(db,`${root}/pushTokens/${currentUser.uid}/${pushDeviceKey}`));try{localStorage.removeItem('musaf.push.key.'+currentUser.uid)}catch{}pushDeviceKey='';pushStatus('Notifikasi push dinonaktifkan untuk browser ini.');updateReminderCenter()}catch(err){pushStatus('Gagal menonaktifkan: '+err.message)}};
 $('enableMusafSound').onclick=()=>{alarmSoundEnabled=!alarmSoundEnabled;try{localStorage.setItem('musaf.alarm.sound',alarmSoundEnabled?'yes':'no')}catch{}if(alarmSoundEnabled){playMusafAlarm()}updateReminderCenter()};
 $('deadlineDismiss').onclick=()=>{try{sessionStorage.setItem('musaf.reminder.closed',wdDate())}catch{}$('deadlineCenter').classList.add('hidden')};
@@ -292,6 +324,7 @@ function applyRole(){
   const previous=lastRoleSignature;
   role=uidRole?.role?uidRole:emailRole?.role?emailRole:null;
   lastRoleSignature=JSON.stringify(role||null);
+  $('musafTestPanel').classList.toggle('hidden',!currentUser||!isAdmin());
   $('tabs').classList.toggle('hidden',!role);
   try{pushDeviceKey=currentUser?localStorage.getItem('musaf.push.key.'+currentUser.uid)||'':''}catch{pushDeviceKey=''}
   updateReminderCenter();
