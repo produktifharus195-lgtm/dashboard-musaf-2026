@@ -1,0 +1,27 @@
+PERBAIKAN LOGIN GOOGLE HP - DASHBOARD MUSAF 2026
+
+1. ZIP ini berisi index.html, push-config.js, firebase-messaging-sw.js,
+   dan folder functions/__. Upload semuanya ke ROOT repository GitHub
+   dashboard-musaf-2026 (bukan isi ZIP sebagai satu file).
+   PENTING: folder functions/__/[[path]].js harus ikut terunggah.
+2. Cloudflare Pages otomatis deploy. Cek status Success di Deployments.
+3. Firebase Authentication > Settings > Authorized domains:
+   pastikan musaf-2026.pages.dev sudah tercatat.
+4. Google Cloud Console > APIs & Services > Credentials > OAuth 2.0 Client IDs.
+   Pada Web application OAuth client yang digunakan Firebase Google Sign-In,
+   tambahkan Authorized redirect URI:
+   https://musaf-2026.pages.dev/__/auth/handler
+   JANGAN hapus URI Firebase lama.
+   Jika ada lebih dari satu OAuth client, pilih Web client yang dipakai
+   provider Google di Firebase Authentication.
+5. Uji URL https://musaf-2026.pages.dev/__/auth/handler
+   untuk melihat bahwa jalur bukan lagi halaman dashboard biasa atau 404.
+6. Di HP buka Chrome dan klik Masuk dengan Google.
+   Seharusnya login berpindah halaman (redirect), lalu kembali ke dashboard.
+7. Tidak perlu mengubah Firebase Realtime Database Rules.
+
+Perubahan hanya pada proses login Google dan proxy auth di Cloudflare Pages.
+Data tugas, hak akses, keuangan, grafik, quotes, push config, dan desain dipertahankan.
+
+Catatan: Login redirect lintas-browser memerlukan proxy dan izin URI OAuth.
+File lolos validasi sintaks, tetapi belum diuji dengan akun Firebase sungguhan.

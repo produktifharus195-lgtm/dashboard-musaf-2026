@@ -123,7 +123,11 @@ function tick(){let box=document.getElementById('v3Countdown');if(!box)return;le
 <script type="module">
 const firebaseConfig = {
   apiKey: "AIzaSyCBw2g-XqUt_M-SrmklkNUGbHv1I8L1Qas",
-  authDomain: "musaf-ldks-fsh-2026.firebaseapp.com",
+  // Pakai domain aplikasi untuk redirect Firebase pada Cloudflare Pages.
+  // Cloudflare Pages Function meneruskan /__/auth/* secara transparan ke Firebase.
+  authDomain: location.hostname.endsWith('.pages.dev')
+    ? location.hostname
+    : "musaf-ldks-fsh-2026.firebaseapp.com",
   databaseURL: "https://musaf-ldks-fsh-2026-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "musaf-ldks-fsh-2026",
   storageBucket: "musaf-ldks-fsh-2026.firebasestorage.app",
@@ -131,7 +135,7 @@ const firebaseConfig = {
   appId: "1:243520667568:web:e3586cc7867031d1aea075"
 };
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,getRedirectResult,onAuthStateChanged,signOut} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {getDatabase,ref,onValue,get,set,push,remove,runTransaction} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 import {getMessaging,isSupported,getToken,onMessage} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js';
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getDatabase(app),root='musaf2026';
@@ -260,7 +264,27 @@ function openTask(t,d,agenda,id='') {if(!canTask(d))return;$('taskHeading').text
 $('taskForm').onsubmit=async e=>{e.preventDefault();let d=$('taskDivision').value,id=$('taskId').value;if(!canTask(d))return;let t={agenda:$('taskAgenda').value,title:$('taskTitle').value.trim(),pic:$('taskPic').value.trim(),deadline:$('taskDeadline').value,priority:$('taskPriority').value,status:$('taskStatus').value,notes:$('taskNotes').value.trim(),updatedAt:Date.now()};try{await set(ref(db,`${root}/tasks/${d}/${id||push(ref(db,`${root}/tasks/${d}`)).key}`),t);$('taskDialog').close()}catch(err){alert('Gagal menyimpan tugas: '+err.message)}};
 $('financeForm').onsubmit=async e=>{e.preventDefault();if(!canFinance())return;let x={type:$('financeType').value,agenda:$('financeAgenda').value,date:$('financeDate').value,division:$('financeDivision').value,title:$('financeTitle').value.trim(),amount:Number($('financeAmount').value),notes:$('financeNotes').value.trim(),createdAt:Date.now()};try{await set(push(ref(db,`${root}/finance`)),x);$('financeDialog').close();$('financeForm').reset()}catch(err){alert('Gagal menyimpan: '+err.message)}};
 $('closeTask').onclick=()=>$('taskDialog').close();$('closeFinance').onclick=()=>$('financeDialog').close();$('financeDivision').innerHTML=divisions.map(d=>`<option value="${d}">${divisionMap[d]}</option>`).join('');$('tabs').onclick=e=>{let b=e.target.closest('[data-tab]');if(!b)return;tab=b.dataset.tab;document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x===b));render()};
-$('login').onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){alert('Login gagal: '+e.message)}};$('logout').onclick=()=>signOut(auth);
+// Di HP gunakan redirect di tab yang sama agar pop-up tidak terblokir.
+const musafMobileLogin=()=>/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (matchMedia('(pointer: coarse)').matches && innerWidth<900);
+getRedirectResult(auth).catch(e=>{ console.error('Firebase redirect login:',e); alert('Login Google belum selesai: '+e.message+'\nPastikan domain Pages diizinkan dan OAuth redirect URI sudah ditambahkan.'); });
+$('login').onclick=async()=>{
+  const provider=new GoogleAuthProvider();
+  try {
+    if(musafMobileLogin()) {
+      await signInWithRedirect(auth,provider);
+      return;
+    }
+    await signInWithPopup(auth,provider);
+  } catch(e) {
+    if(!musafMobileLogin() && (e.code==='auth/popup-blocked'||e.code==='auth/popup-closed-by-user')) {
+      if(confirm('Pop-up login tertutup. Lanjutkan login Google di halaman yang sama?')) {
+        try { await signInWithRedirect(auth,provider); return; }
+        catch(x) { alert('Login gagal: '+x.message); return; }
+      }
+    }
+    alert('Login gagal: '+e.message);
+  }
+};$('logout').onclick=()=>signOut(auth);
 function cleanup(){[...authUnsubs,...dataUnsubs].forEach(fn=>fn());authUnsubs=[];dataUnsubs=[];tasks={};finance={};roles={};emailAccess={};role=null;uidRole=null;emailRole=null}
 function watch(path,cb,group='data'){const off=onValue(ref(db,`${root}/${path}`),snap=>cb(snap.val()||{}),err=>{$('connection').className='notice';$('connection').textContent='🔒 Gagal membaca '+path+': '+err.message});(group==='auth'?authUnsubs:dataUnsubs).push(off)}
 let lastRoleSignature='';
